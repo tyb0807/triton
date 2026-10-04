@@ -68,14 +68,7 @@ namespace {
 
 using mlir::triton::tools::ScopedLLVMOptions;
 
-// Version 2 appends enableMISched and emitObject to CodegenOptions and adds the
-// two MIR entry points. Version 1 is still accepted by the entry points that
-// predate those two fields, because this library ships as a prebuilt artifact
-// published one pull request ahead of the Python that calls it: in between, a
-// from-source build of this library has to keep working against a
-// third_party/amd/backend/compiler.py that still sends 1.
 constexpr uint32_t codegenABIVersion = 2;
-constexpr uint32_t codegenMinABIVersion = 1;
 
 struct CodegenOptions {
   uint32_t abiVersion;
@@ -146,13 +139,8 @@ void enableFPContraction(llvm::Module &module) {
         instruction.setHasAllowContract(true);
 }
 
-// minVersion is the oldest ABI whose CodegenOptions is long enough for the
-// caller: pass codegenABIVersion from any entry point that reads a field added
-// after version 1, since an older caller's struct stops short of it.
-int validateOptions(const CodegenOptions *options, char **error,
-                    uint32_t minVersion = codegenMinABIVersion) {
-  if (options->abiVersion < minVersion ||
-      options->abiVersion > codegenABIVersion)
+int validateOptions(const CodegenOptions *options, char **error) {
+  if (options->abiVersion != codegenABIVersion)
     return fail("incompatible AMD code-generation ABI", error);
   if (!options->triple || !options->processor || !options->features ||
       !options->abi)
@@ -365,7 +353,7 @@ extern "C" TRITON_AMD_EXPORT int triton_amdgpu_translate_to_mir(
 
   if (!llvmIR || !options || !mir || !mirSize || !dag || !dagSize)
     return fail("invalid AMD MIR translation arguments", error);
-  if (int status = validateOptions(options, error, codegenABIVersion))
+  if (int status = validateOptions(options, error))
     return status;
 
   std::call_once(targetInitialization, initializeTarget);
@@ -435,7 +423,7 @@ extern "C" TRITON_AMD_EXPORT int triton_amdgpu_translate_mir_to_asm(
 
   if (!mirText || !options || !output || !outputSize)
     return fail("invalid AMD MIR code-generation arguments", error);
-  if (int status = validateOptions(options, error, codegenABIVersion))
+  if (int status = validateOptions(options, error))
     return status;
 
   std::call_once(targetInitialization, initializeTarget);
